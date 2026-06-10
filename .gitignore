@@ -5,7 +5,6 @@
 *.slo
 *.lo
 *.o
-*.obj
 
 # Precompiled Headers
 *.gch
@@ -67,3 +66,13 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+.vs/
+x64/
+Debug/
+Release/
+*.suo
+*.user
+*.pdb
+*.ilk
+*.exe
