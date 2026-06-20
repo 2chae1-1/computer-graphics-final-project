@@ -5,6 +5,9 @@
 #include <fstream>
 #include "gl\freeglut.h"		// OpenGL header files
 #include <list>
+#include <stdio.h>
+#include <string.h>
+#include <vector>
 //#define TIME_CHECK_
 #define DEPTH_CALIB_
 #pragma warning(disable:4996)
@@ -34,6 +37,26 @@ struct MMesh {
 	int T2;
 	int T3;
 	int T4;
+	int N1;
+	int N2;
+	int N3;
+	int N4;
+	int VertexCount;
+	int MaterialId;
+};
+
+struct ObjModel {
+	vector<Vertex> vertices;
+	vector<Vertex> texcoords;
+	vector<Vertex> normals;
+	vector<MMesh> faces;
+	GLuint textureId;
+	GLuint barkTextureId;
+	GLuint branchTextureId;
+	bool hasTexture;
+	bool hasBarkTexture;
+	bool hasBranchTexture;
+	bool hasNormals;
 };
 
 // variables for GUI
@@ -68,9 +91,23 @@ float t[3] = {0};
 Vertex skt[23];
 BOOLEAN bTracked = false;
 bool checkt = false;
-Vertex *vertex;
-Vertex *vertex_color;
-MMesh *mymesh;
+ObjModel tentModel;
+ObjModel campfireModel;
+ObjModel treeModel;
+ObjModel lanternModel;
+ObjModel rockModel;
+ObjModel woodModel;
+ObjModel campingCarModel;
+ObjModel picnicTableModel;
+ObjModel butterflyModel;
+ObjModel dogModel;
+GLuint groundTextureId = 0;
+GLuint mountainTextureId = 0;
+
+bool showEnhancedScene = false;
+bool showShadingDemo = true;
+bool showSubdivisionDemo = false;
+bool showSimplificationDemo = false;
 
 bool recheck;
 
@@ -126,6 +163,24 @@ void Reader();
 void DrawObj();
 void DrawMeshObj();
 void Setskt();
+void DrawDuskBackground();
+void ApplyShadingDemoState();
+void DrawFakeShadow(float x, float y, float z, float scaleX, float scaleZ, float alpha);
+void DrawGroundGlow(float x, float y, float z, float scaleX, float scaleZ, float alpha, float red, float green, float blue);
+void DrawVerticalGlow(float x, float y, float z, float scaleX, float scaleY, float alpha, float red, float green, float blue);
+void DrawCampfireSmoke(float x, float y, float z, float sceneTime);
+bool LoadObj(const char* path, ObjModel& model, float scaleValue);
+GLuint LoadTexture(const char* path);
+void DrawModel(const ObjModel& model, bool useTexture);
+void DrawTentModel(const ObjModel& model);
+void DrawDogModel(const ObjModel& model);
+void DrawTreeModel(const ObjModel& model);
+void DrawTreeInstance(float x, float y, float z, float scaleValue, float rotateY);
+void DrawRockInstance(float x, float y, float z, float scaleX, float scaleY, float scaleZ, float rotateY);
+void DrawCampingCarInstance(float x, float y, float z, float scaleValue, float rotateY);
+void DrawPicnicTableInstance(float x, float y, float z, float scaleValue, float rotateY);
+void DrawButterflyInstance(float x, float y, float z, float scaleValue, float rotateY, float rotateX);
+void DrawDogInstance(float x, float y, float z, float scaleValue, float rotateY);
 
 //CameraSpacePoint m_SpacePoint[JointType::JointType_Count];
 void Track();
