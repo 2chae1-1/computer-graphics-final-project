@@ -101,12 +101,15 @@ ObjModel campingCarModel;
 ObjModel picnicTableModel;
 ObjModel butterflyModel;
 ObjModel dogModel;
+ObjModel dogSubdividedModel;
+ObjModel watermelonModel;
+ObjModel simplifiedWatermelonModel;
 GLuint groundTextureId = 0;
 GLuint mountainTextureId = 0;
 
 bool showEnhancedScene = false;
 bool showShadingDemo = true;
-bool showSubdivisionDemo = false;
+bool showSubdivisionDemo = true;
 bool showSimplificationDemo = false;
 
 bool recheck;
@@ -170,6 +173,8 @@ void DrawGroundGlow(float x, float y, float z, float scaleX, float scaleZ, float
 void DrawVerticalGlow(float x, float y, float z, float scaleX, float scaleY, float alpha, float red, float green, float blue);
 void DrawCampfireSmoke(float x, float y, float z, float sceneTime);
 bool LoadObj(const char* path, ObjModel& model, float scaleValue);
+bool BuildSubdividedDogModel(const ObjModel& source, ObjModel& result);
+bool BuildSimplifiedWatermelonModel(const ObjModel& source, ObjModel& result, float gridCellSize);
 GLuint LoadTexture(const char* path);
 void DrawModel(const ObjModel& model, bool useTexture);
 void DrawTentModel(const ObjModel& model);
@@ -181,6 +186,7 @@ void DrawCampingCarInstance(float x, float y, float z, float scaleValue, float r
 void DrawPicnicTableInstance(float x, float y, float z, float scaleValue, float rotateY);
 void DrawButterflyInstance(float x, float y, float z, float scaleValue, float rotateY, float rotateX);
 void DrawDogInstance(float x, float y, float z, float scaleValue, float rotateY);
+void DrawWatermelonInstance(float x, float y, float z, float scaleValue, float rotateY);
 
 //CameraSpacePoint m_SpacePoint[JointType::JointType_Count];
 void Track();

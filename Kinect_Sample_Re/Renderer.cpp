@@ -1,5 +1,6 @@
 #include "Renderer.h"
 #undef scale
+#include <map>
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
@@ -33,7 +34,7 @@ void draw_center(void)
 void idle() {
 	static GLuint previousClock = glutGet(GLUT_ELAPSED_TIME);
 	static GLuint currentClock = glutGet(GLUT_ELAPSED_TIME);
-	static GLfloat deltaT;
+	static GLuint deltaT;
 
 	currentClock = glutGet(GLUT_ELAPSED_TIME);
 	deltaT = currentClock - previousClock;
@@ -386,12 +387,15 @@ void keyboard(unsigned char key, int x, int y)
 
 	case '2':
 		showSubdivisionDemo = !showSubdivisionDemo;
-		cout << "[Demo 2] Subdivision: " << (showSubdivisionDemo ? "ON" : "OFF") << endl;
+		cout << "[Demo 2] Subdivision: "
+			<< (showSubdivisionDemo ? "ON (subdivided dog)" : "OFF (original low-poly dog)") << endl;
 		break;
 
 	case '3':
 		showSimplificationDemo = !showSimplificationDemo;
-		cout << "[Demo 3] Simplification: " << (showSimplificationDemo ? "ON" : "OFF") << endl;
+		cout << "[Demo 3] Simplification: "
+			<< (showSimplificationDemo ? "ON (simplified watermelon)" : "OFF (original watermelon)")
+			<< endl;
 		break;
 
 	case 'r':
@@ -415,36 +419,16 @@ void keyboard(unsigned char key, int x, int y)
 
 void ApplyShadingDemoState()
 {
-	if (showShadingDemo)
-	{
-		glEnable(GL_LIGHTING);
-		glEnable(GL_LIGHT0);
-		glEnable(GL_NORMALIZE);
-		glShadeModel(GL_SMOOTH);
+	// Manual Lambert shading will be calculated in DrawModel().
+	// Therefore, fixed-function OpenGL lighting must stay off.
+	glDisable(GL_LIGHTING);
+	glDisable(GL_LIGHT0);
+	glDisable(GL_LIGHT1);
+	glDisable(GL_LIGHT2);
+	glDisable(GL_NORMALIZE);
 
-		GLfloat diffuse0[4] = { 1.0f, 1.0f, 0.95f, 1.0f };
-		GLfloat ambient0[4] = { 0.85f, 0.85f, 0.78f, 1.0f };
-		GLfloat specular0[4] = { 0.7f, 0.7f, 0.65f, 1.0f };
-		GLfloat light0_pos[4] = { 2.0f, 2.0f, 2.0f, 1.0f };
-
-		glLightfv(GL_LIGHT0, GL_POSITION, light0_pos);
-		glLightfv(GL_LIGHT0, GL_AMBIENT, ambient0);
-		glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuse0);
-		glLightfv(GL_LIGHT0, GL_SPECULAR, specular0);
-
-		glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0.2f);
-		glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.1f);
-		glLightf(GL_LIGHT0, GL_QUADRATIC_ATTENUATION, 0.05f);
-	}
-	else
-	{
-		glDisable(GL_LIGHTING);
-		glDisable(GL_LIGHT0);
-		glDisable(GL_LIGHT1);
-		glDisable(GL_LIGHT2);
-		glDisable(GL_NORMALIZE);
-		glShadeModel(GL_FLAT);
-	}
+	// One brightness value per polygon face.
+	glShadeModel(GL_FLAT);
 }
 
 void DrawDuskBackground()
@@ -683,9 +667,8 @@ void display()
 	);
 	glTranslatef(t[0], t[1], t[2]);
 
-	GLfloat m[4][4], m1[4][4];
+	GLfloat m[4][4];
 	build_rotmatrix(m, quat);
-	GLfloat r, g, b;
 	glMultMatrixf(&m[0][0]);
 
 	DrawDuskBackground();
@@ -747,7 +730,7 @@ void display()
 	const float TENT_Z = 0.05f;
 	const float TENT_SCALE = 1.0f;
 
-	DrawFakeShadow(TENT_X, GROUND_Y - 0.025f, TENT_Z + 0.03f, 0.55f, 0.36f, 0.16f);
+	DrawFakeShadow(TENT_X - 0.10f, GROUND_Y - 0.025f, TENT_Z - 0.08f, 0.60f, 0.38f, 0.14f);
 
 	glPushMatrix();
 	glTranslatef(TENT_X, TENT_Y, TENT_Z);
@@ -793,75 +776,96 @@ void display()
 	DrawButterflyInstance(butterflyX, butterflyY, butterflyZ, 0.65f, butterflyRotateY, butterflyWingTiltX);
 
 
-	// -------------------- Dog: smooth look-at movement --------------------
-	const float DOG_BASE_X = -0.15f;
+	// -------------------- Dog: fixed position + stronger continuous watching rotation --------------------
+	const float DOG_BASE_X = 0.10f;
 	const float DOG_BASE_Y = GROUND_Y + 0.02f;
-	const float DOG_BASE_Z = 1.95f;
-	const float DOG_SCALE = 0.325f;
 
-	// Dog follows the same figure-eight path with a small phase delay.
-	const float dogPhase = butterflyPhase - 0.45f;
-	const float dogX = DOG_BASE_X + sin(dogPhase) * 0.35f;
-	const float dogZ = DOG_BASE_Z + sin(dogPhase * 2.0f) * 0.18f;
+	// Place the dog along the same center line as the butterfly infinity path.
+	// This makes the dog feel aligned with the middle "-" part of the figure-eight.
+	const float DOG_BASE_Z = 1.70f;
 
-	// Direction from dog to butterfly on the ground plane.
-	const float dogToButterflyX = butterflyX - dogX;
-	const float dogToButterflyZ = butterflyZ - dogZ;
+	const float DOG_SCALE = 0.45f;
 
-	// Target angle toward butterfly.
-	const float DOG_MODEL_FORWARD_OFFSET = 0.0f;
-	const float dogTargetRotateY = atan2(dogToButterflyX, dogToButterflyZ) * 180.0f / 3.14159f + DOG_MODEL_FORWARD_OFFSET;
+	// Keep the dog fixed in place.
+	const float dogX = DOG_BASE_X;
+	const float dogZ = DOG_BASE_Z;
 
-	// Smooth rotation memory.
-	// This prevents the dog from snapping when atan2 jumps between 180 and -180 degrees.
-	static float dogSmoothRotateY = 35.0f;
+	// Make the turning much more obvious.
+	// The butterfly X position tells whether it is on the left loop or right loop.
+	const float DOG_BASE_ROTATE_Y = 45.0f;     // Dog generally faces toward the butterfly path.
+	const float DOG_MAX_LOOK_YAW = 32.0f;      // Stronger left/right turning than before.
 
-	float dogRotateDelta = dogTargetRotateY - dogSmoothRotateY;
+	// Normalize butterfly horizontal offset into roughly [-1, 1].
+	float dogLookAmount = (butterflyX - BUTTERFLY_BASE_X) / 0.52f;
+	if (dogLookAmount > 1.0f)
+		dogLookAmount = 1.0f;
+	if (dogLookAmount < -1.0f)
+		dogLookAmount = -1.0f;
 
-	// Normalize angle difference to [-180, 180].
-	while (dogRotateDelta > 180.0f)
-		dogRotateDelta -= 360.0f;
-	while (dogRotateDelta < -180.0f)
-		dogRotateDelta += 360.0f;
+	// Main target yaw: clear turning to left/right depending on butterfly loop side.
+	float dogTargetRotateY = DOG_BASE_ROTATE_Y + dogLookAmount * DOG_MAX_LOOK_YAW;
 
-	// Smaller value = smoother/slower dog turning.
-	dogSmoothRotateY += dogRotateDelta * 0.08f;
+	// Add a continuous small motion so the dog keeps moving its head/body slightly
+	// even near the center crossing of the infinity path.
+	dogTargetRotateY += sin(sceneTime * 2.8f) * 4.0f;
 
-	float dogIdleYaw = sin(sceneTime * 2.2f) * 2.0f;
+	// Smooth rotation memory so it looks alive, not snapping.
+	static float dogSmoothRotateY = DOG_BASE_ROTATE_Y;
+	dogSmoothRotateY += (dogTargetRotateY - dogSmoothRotateY) * 0.10f;
 
-	DrawFakeShadow(dogX, GROUND_Y - 0.025f, dogZ, 0.16f, 0.10f, 0.13f);
+	// Tiny extra idle motion.
+	float dogIdleYaw = sin(sceneTime * 3.6f) * 1.5f;
+
+	DrawFakeShadow(dogX - 0.02f, GROUND_Y - 0.025f, dogZ + 0.07f, 0.24f, 0.15f, 0.12f);
 	DrawDogInstance(dogX, DOG_BASE_Y, dogZ, DOG_SCALE, dogSmoothRotateY + dogIdleYaw);
 
 	// Camping Car Placement: keep it parked farther left/back so it does not cut into the tent.
-	DrawFakeShadow(-1.75f, GROUND_Y - 0.025f, -1.35f, 0.58f, 0.28f, 0.15f);
+	DrawFakeShadow(-1.75f, GROUND_Y - 0.025f, -1.35f, 0.62f, 0.30f, 0.10f);
 	DrawCampingCarInstance(-1.75f, GROUND_Y, -1.35f, 0.85f, 105.0f);
 	if (showShadingDemo)
-		DrawVerticalGlow(-1.66f, GROUND_Y + 0.36f, -1.24f,0.16f, 0.10f, 0.12f, 1.0f, 0.78f, 0.34f);
-
+		DrawVerticalGlow(-1.66f, GROUND_Y + 0.36f, -1.24f, 0.27f, 0.18f, 0.24f, 1.0f, 0.72f, 0.24f);
+	
 	// Table Placement: move slightly forward and left.
-// Lantern position is derived from TABLE_X/Y/Z, so it follows the table automatically.
 	const float TABLE_X = -0.95f;
 	const float TABLE_Y = GROUND_Y + 0.08f;
 	const float TABLE_Z = 1.50f;
 	const float TABLE_SCALE = 0.70f;
 	const float TABLE_ROTATE_Y = -20.0f;
-	DrawFakeShadow(TABLE_X, GROUND_Y - 0.025f, TABLE_Z,0.34f, 0.22f, 0.14f);
+	DrawFakeShadow(TABLE_X - 0.05f, GROUND_Y - 0.025f, TABLE_Z + 0.04f,	0.36f, 0.23f, 0.12f);
 	DrawPicnicTableInstance(TABLE_X, TABLE_Y, TABLE_Z, TABLE_SCALE, TABLE_ROTATE_Y);
 
+	// Table-top props: closer to the center and swapped left/right positions.
+	const float TABLE_ROTATE_RAD = TABLE_ROTATE_Y * 3.14159265f / 180.0f;
+	const float TABLE_LONG_DIR_X = cos(TABLE_ROTATE_RAD);
+	const float TABLE_LONG_DIR_Z = -sin(TABLE_ROTATE_RAD);
+		
+	const float TABLE_PROP_OFFSET = TABLE_SCALE * 0.20f;
+	const float TABLETOP_PROP_Y = TABLE_Y + 0.26f;
+
+	// Swapped: watermelon moves to the previous lantern side.
+	const float WATERMELON_X = TABLE_X + TABLE_LONG_DIR_X * TABLE_PROP_OFFSET;
+	const float WATERMELON_Y = TABLETOP_PROP_Y;
+	const float WATERMELON_Z = TABLE_Z + TABLE_LONG_DIR_Z * TABLE_PROP_OFFSET;
+	const float WATERMELON_SCALE = 0.50f;
+	const float WATERMELON_ROTATE_Y = TABLE_ROTATE_Y;
+	DrawFakeShadow(WATERMELON_X + 0.03f, TABLETOP_PROP_Y - 0.02f, WATERMELON_Z + 0.02f, 0.08f, 0.05f, 0.10f);
+	DrawWatermelonInstance(WATERMELON_X, WATERMELON_Y, WATERMELON_Z, WATERMELON_SCALE, WATERMELON_ROTATE_Y);
+	
 	// Campfire: textured model pulled forward from the tent.
 	const float CAMPFIRE_X = 0.35f;
 	const float CAMPFIRE_Y = GROUND_Y + 0.10f;
 	const float CAMPFIRE_Z = 0.95f;
 	const float CAMPFIRE_SCALE = 0.135f;
-	DrawFakeShadow(CAMPFIRE_X - 0.02f, GROUND_Y - 0.025f, CAMPFIRE_Z - 0.03f, 0.10f, 0.08f, 0.06f);
+	DrawFakeShadow(CAMPFIRE_X - 0.02f, GROUND_Y - 0.025f, CAMPFIRE_Z - 0.03f,0.10f, 0.08f, 0.04f);
 	float flicker = 0.85f + 0.15f * sin(sceneTime * 8.0f);
 	if (showShadingDemo)
 	{
 		glEnable(GL_LIGHT1);
-		DrawGroundGlow(CAMPFIRE_X, GROUND_Y - 0.020f, CAMPFIRE_Z, 0.42f, 0.30f, 0.18f * flicker, 1.0f, 0.36f, 0.08f);
+		DrawGroundGlow(CAMPFIRE_X, GROUND_Y - 0.020f, CAMPFIRE_Z, 0.62f, 0.44f, 0.27f * flicker, 1.0f, 0.38f, 0.08f);
+		DrawVerticalGlow(CAMPFIRE_X, CAMPFIRE_Y + 0.24f, CAMPFIRE_Z, 0.18f, 0.28f, 0.25f * flicker, 1.0f, 0.46f, 0.10f);
 		GLfloat fire_pos[4] = { CAMPFIRE_X, CAMPFIRE_Y + 0.35f, CAMPFIRE_Z, 1.0f };
-		GLfloat fire_diffuse[4] = { 1.0f * flicker, 0.45f * flicker, 0.12f * flicker, 1.0f };
-		GLfloat fire_ambient[4] = { 0.20f, 0.08f, 0.02f, 1.0f };
+		GLfloat fire_diffuse[4] = { 1.0f * flicker, 0.52f * flicker, 0.16f * flicker, 1.0f };
+		GLfloat fire_ambient[4] = { 0.24f, 0.10f, 0.03f, 1.0f };
 		glLightfv(GL_LIGHT1, GL_POSITION, fire_pos);
 		glLightfv(GL_LIGHT1, GL_DIFFUSE, fire_diffuse);
 		glLightfv(GL_LIGHT1, GL_AMBIENT, fire_ambient);
@@ -888,17 +892,18 @@ void display()
 		DrawCampfireSmoke(CAMPFIRE_X, CAMPFIRE_Y + 0.22f, CAMPFIRE_Z, sceneTime);
 
 	// Lantern on Table: derive its position from the table so it sits on the tabletop.
-	const float LANTERN_X = TABLE_X;
-	const float LANTERN_Y = TABLE_Y + 0.26f;
-	const float LANTERN_Z = TABLE_Z;
+	// Swapped: lantern moves to the previous watermelon side.
+	const float LANTERN_X = TABLE_X - TABLE_LONG_DIR_X * TABLE_PROP_OFFSET;
+	const float LANTERN_Y = TABLETOP_PROP_Y;
+	const float LANTERN_Z = TABLE_Z - TABLE_LONG_DIR_Z * TABLE_PROP_OFFSET;
 	const float LANTERN_SCALE = 0.18f;
 	if (showShadingDemo)
 	{
 		glEnable(GL_LIGHT2);
 		GLfloat lantern_pos[4] = { LANTERN_X, LANTERN_Y + 0.12f, LANTERN_Z, 1.0f };
-		GLfloat lantern_light_diffuse[4] = { 0.95f, 0.72f, 0.34f, 1.0f };
-		GLfloat lantern_light_ambient[4] = { 0.08f, 0.06f, 0.03f, 1.0f };
-		GLfloat lantern_light_specular[4] = { 0.30f, 0.22f, 0.10f, 1.0f };
+		GLfloat lantern_light_diffuse[4] = { 1.0f, 0.78f, 0.38f, 1.0f };
+		GLfloat lantern_light_ambient[4] = { 0.10f, 0.075f, 0.04f, 1.0f };
+		GLfloat lantern_light_specular[4] = { 0.34f, 0.25f, 0.12f, 1.0f };
 		glLightfv(GL_LIGHT2, GL_POSITION, lantern_pos);
 		glLightfv(GL_LIGHT2, GL_DIFFUSE, lantern_light_diffuse);
 		glLightfv(GL_LIGHT2, GL_AMBIENT, lantern_light_ambient);
@@ -918,28 +923,37 @@ void display()
 
 	glPushMatrix();
 	glTranslatef(LANTERN_X, LANTERN_Y, LANTERN_Z);
+	glRotatef(TABLE_ROTATE_Y, 0.0f, 1.0f, 0.0f);
 	glScalef(LANTERN_SCALE, LANTERN_SCALE, LANTERN_SCALE);
 	DrawModel(lanternModel, true);
 	glPopMatrix();
 	if (showShadingDemo)
-		DrawVerticalGlow(LANTERN_X, LANTERN_Y + 0.03f, LANTERN_Z, 0.16f, 0.18f, 0.14f, 1.0f, 0.82f, 0.32f);
+		DrawFakeShadow(LANTERN_X, LANTERN_Y - 0.01f, LANTERN_Z, 0.07f, 0.04f, 0.08f);
 
-	DrawTreeInstance(-0.35f, GROUND_Y + 0.05f, -1.35f, 0.28f, 0.0f);      // Tree 1
-	// Small tree between Tree 1 and Tree 2.
-	// Small tree between Tree 1 and Tree 2, slightly larger than half of Tree 1.
-	DrawTreeInstance(0.25f, GROUND_Y + 0.05f, -1.72f, 0.18f, -12.0f);
+	// Trees: subtle ground-contact shadows.
+// Keep them soft and not too large, because these are background trees.
+
+	DrawFakeShadow(-0.30f, GROUND_Y - 0.025f, -1.42f, 0.14f, 0.08f, 0.07f);
+	DrawTreeInstance(-0.35f, GROUND_Y + 0.05f, -1.35f, 0.28f, 0.0f);	// Tree 1
+
+	DrawFakeShadow(0.29f, GROUND_Y - 0.025f, -1.78f, 0.10f, 0.06f, 0.06f);
+	DrawTreeInstance(0.25f, GROUND_Y + 0.05f, -1.72f, 0.18f, -12.0f);     // Small tree
+
+	DrawFakeShadow(0.96f, GROUND_Y - 0.025f, -1.52f, 0.13f, 0.08f, 0.07f);
 	DrawTreeInstance(0.90f, GROUND_Y + 0.05f, -1.45f, 0.26f, 25.0f);      // Tree 2
+
+	DrawFakeShadow(1.51f, GROUND_Y - 0.025f, -1.08f, 0.15f, 0.09f, 0.08f);
 	DrawTreeInstance(1.45f, GROUND_Y + 0.05f, -1.00f, 0.30f, -20.0f);     // Tree 3
 
 	// Rock Placement: three rocks with different sizes.
 	// Rock Placement: three rocks with different sizes.
-	DrawFakeShadow(0.95f, GROUND_Y - 0.025f, -0.22f, 0.14f, 0.10f, 0.07f);
+	DrawFakeShadow(0.95f + 0.06f, GROUND_Y - 0.025f, -0.22f - 0.06f,		0.16f, 0.10f, 0.07f);
 	DrawRockInstance(0.95f, GROUND_Y + 0.12f, -0.22f, 1.25f, 0.55f, 1.10f, 35.0f);   // 큰 납작한 돌
 
-	DrawFakeShadow(1.32f, GROUND_Y - 0.025f, -0.02f, 0.11f, 0.08f, 0.06f);
+	DrawFakeShadow(1.32f + 0.06f, GROUND_Y - 0.025f, -0.02f - 0.05f, 0.12f, 0.08f, 0.06f);
 	DrawRockInstance(1.32f, GROUND_Y + 0.11f, -0.02f, 0.90f, 0.45f, 0.70f, -40.0f);   // 중간 돌
 
-	DrawFakeShadow(1.55f, GROUND_Y - 0.025f, -0.02f, 0.10f, 0.07f, 0.06f);
+	DrawFakeShadow(1.55f + 0.05f, GROUND_Y - 0.025f, -0.02f - 0.04f, 0.10f, 0.07f, 0.05f);
 	DrawRockInstance(1.55f, GROUND_Y + 0.10f, -0.02f, 0.65f, 0.35f, 0.50f, 15.0f);   // 작은 돌
 
 	// Wood Log Placement: textured log pile near the campfire, but outside the fire itself.
@@ -948,7 +962,7 @@ void display()
 	const float WOOD_Z = 1.18f;
 	const float WOOD_SCALE = 0.65f;
 	const float WOOD_ROTATE_Y = -25.0f;
-	DrawFakeShadow(WOOD_X - 0.02f, GROUND_Y - 0.025f, WOOD_Z - 0.04f, 0.18f, 0.09f, 0.10f);
+	DrawFakeShadow(WOOD_X + 0.08f, GROUND_Y - 0.025f, WOOD_Z + 0.06f, 0.22f, 0.10f, 0.11f);
 	GLfloat wood_ambient[4] = { 0.38f, 0.26f, 0.16f, 1.0f };
 	GLfloat wood_diffuse[4] = { 0.72f, 0.48f, 0.28f, 1.0f };
 	GLfloat wood_specular[4] = { 0.12f, 0.09f, 0.06f, 1.0f };
@@ -970,10 +984,14 @@ void display()
 
 void DrawObj()
 {
+	// Legacy template entry point kept for compatibility.
+	// The current renderer draws loaded OBJ assets through DrawModel() and instance helpers.
 }
 
 void DrawMeshObj()
 {
+	// Legacy template entry point kept for compatibility.
+	// The current renderer draws loaded OBJ assets through DrawModel() and instance helpers.
 }
 
 static FILE* OpenAssetWithFallback(const char* path, char* openedPath, int openedPathSize)
@@ -994,7 +1012,7 @@ static FILE* OpenAssetWithFallback(const char* path, char* openedPath, int opene
 	return fp;
 }
 
-bool ParseFaceVertex(const char* token, int* v, int* vt, int* vn)
+static bool ParseFaceVertex(const char* token, int* v, int* vt, int* vn)
 {
 	*v = 0;
 	*vt = 0;
@@ -1163,6 +1181,8 @@ bool LoadObj(const char* path, ObjModel& model, float scaleValue)
 				currentMaterialId = DOG_MATERIAL_TAIL_1;
 			else if (strstr(line, "Tail_2") != NULL)
 				currentMaterialId = DOG_MATERIAL_TAIL_2;
+
+
 			else
 				currentMaterialId = TREE_MATERIAL_NONE;
 		}
@@ -1233,6 +1253,168 @@ bool LoadObj(const char* path, ObjModel& model, float scaleValue)
 		<< model.normals.size() << " normals, "
 		<< model.faces.size() << " faces" << endl;
 	return !model.vertices.empty() && !model.faces.empty();
+}
+
+struct ClusterKey
+{
+	int X;
+	int Y;
+	int Z;
+
+	bool operator<(const ClusterKey& other) const
+	{
+		if (X != other.X)
+			return X < other.X;
+		if (Y != other.Y)
+			return Y < other.Y;
+		return Z < other.Z;
+	}
+};
+
+struct VertexCluster
+{
+	float SumX;
+	float SumY;
+	float SumZ;
+	int Count;
+	int NewIndex;
+};
+
+static bool HasDuplicateFaceVertex(const MMesh& face)
+{
+	int v[4] = { face.V1, face.V2, face.V3, face.V4 };
+	for (int i = 0; i < face.VertexCount; i++)
+	{
+		if (v[i] <= 0)
+			return true;
+		for (int j = i + 1; j < face.VertexCount; j++)
+		{
+			if (v[i] == v[j])
+				return true;
+		}
+	}
+	return false;
+}
+
+bool BuildSimplifiedWatermelonModel(const ObjModel& source, ObjModel& result, float gridCellSize)
+{
+	result.vertices.clear();
+	result.texcoords = source.texcoords;
+	result.normals.clear();
+	result.faces.clear();
+	result.textureId = source.textureId;
+	result.barkTextureId = source.barkTextureId;
+	result.branchTextureId = source.branchTextureId;
+	result.hasTexture = source.hasTexture;
+	result.hasBarkTexture = source.hasBarkTexture;
+	result.hasBranchTexture = source.hasBranchTexture;
+	result.hasNormals = false;
+
+	if (source.vertices.empty() || source.faces.empty())
+	{
+		cout << "[Demo 3] Watermelon simplification skipped: source model is empty." << endl;
+		return false;
+	}
+
+	if (gridCellSize <= 0.0001f)
+		gridCellSize = 0.035f;
+
+	vector<int> vertexRemap(source.vertices.size() + 1, 0);
+	map<ClusterKey, int> clusterLookup;
+	vector<VertexCluster> clusters;
+
+	for (size_t i = 0; i < source.vertices.size(); i++)
+	{
+		const Vertex& vertex = source.vertices[i];
+		ClusterKey key;
+		key.X = (int)floor(vertex.X / gridCellSize);
+		key.Y = (int)floor(vertex.Y / gridCellSize);
+		key.Z = (int)floor(vertex.Z / gridCellSize);
+
+		map<ClusterKey, int>::iterator found = clusterLookup.find(key);
+		int clusterIndex = 0;
+		if (found == clusterLookup.end())
+		{
+			VertexCluster cluster;
+			cluster.SumX = vertex.X;
+			cluster.SumY = vertex.Y;
+			cluster.SumZ = vertex.Z;
+			cluster.Count = 1;
+			cluster.NewIndex = 0;
+			clusters.push_back(cluster);
+			clusterIndex = (int)clusters.size();
+			clusterLookup[key] = clusterIndex;
+		}
+		else
+		{
+			clusterIndex = found->second;
+			VertexCluster& cluster = clusters[clusterIndex - 1];
+			cluster.SumX += vertex.X;
+			cluster.SumY += vertex.Y;
+			cluster.SumZ += vertex.Z;
+			cluster.Count++;
+		}
+
+		vertexRemap[i + 1] = clusterIndex;
+	}
+
+	result.vertices.reserve(clusters.size());
+	for (size_t i = 0; i < clusters.size(); i++)
+	{
+		VertexCluster& cluster = clusters[i];
+		float count = (float)cluster.Count;
+		Vertex vertex;
+		vertex.X = cluster.SumX / count;
+		vertex.Y = cluster.SumY / count;
+		vertex.Z = cluster.SumZ / count;
+		vertex.index_1 = 0;
+		vertex.index_2 = 0;
+		vertex.index_3 = 0;
+		result.vertices.push_back(vertex);
+		cluster.NewIndex = (int)result.vertices.size();
+	}
+
+	result.faces.reserve(source.faces.size());
+	for (size_t i = 0; i < source.faces.size(); i++)
+	{
+		MMesh face = source.faces[i];
+		int* vertexIndex[4] = { &face.V1, &face.V2, &face.V3, &face.V4 };
+		int* texcoordIndex[4] = { &face.T1, &face.T2, &face.T3, &face.T4 };
+		int* normalIndex[4] = { &face.N1, &face.N2, &face.N3, &face.N4 };
+		bool validFace = true;
+
+		for (int j = 0; j < face.VertexCount; j++)
+		{
+			int oldVertexIndex = *vertexIndex[j];
+			if (oldVertexIndex <= 0 || oldVertexIndex > (int)source.vertices.size())
+			{
+				validFace = false;
+				break;
+			}
+
+			int clusterIndex = vertexRemap[oldVertexIndex];
+			if (clusterIndex <= 0 || clusterIndex > (int)clusters.size())
+			{
+				validFace = false;
+				break;
+			}
+
+			*vertexIndex[j] = clusters[clusterIndex - 1].NewIndex;
+
+			if (*texcoordIndex[j] <= 0 || *texcoordIndex[j] > (int)result.texcoords.size())
+				*texcoordIndex[j] = 0;
+			*normalIndex[j] = 0;
+		}
+
+		if (validFace && !HasDuplicateFaceVertex(face))
+			result.faces.push_back(face);
+	}
+
+	cout << "[Demo 3] Watermelon simplification: "
+		<< source.vertices.size() << " vertices / " << source.faces.size() << " faces -> "
+		<< result.vertices.size() << " vertices / " << result.faces.size() << " faces" << endl;
+
+	return !result.vertices.empty() && !result.faces.empty();
 }
 
 GLuint LoadTexture(const char* path)
@@ -1314,6 +1496,59 @@ static void ComputeFaceNormal(const Vertex& p1, const Vertex& p2, const Vertex& 
 	}
 }
 
+static float ClampFloat(float value, float minValue, float maxValue)
+{
+	if (value < minValue)
+		return minValue;
+	if (value > maxValue)
+		return maxValue;
+	return value;
+}
+
+static float ComputeManualLambertBrightness(const float normal[3])
+{
+	// Directional light for the manual shading demo.
+	// Change this vector slightly if you want the bright side to face another direction.
+	float lightDir[3] = { -0.45f, 0.85f, 0.35f };
+
+	float length = sqrt(lightDir[0] * lightDir[0] +
+		lightDir[1] * lightDir[1] +
+		lightDir[2] * lightDir[2]);
+
+	if (length > 0.00001f)
+	{
+		lightDir[0] /= length;
+		lightDir[1] /= length;
+		lightDir[2] /= length;
+	}
+
+	float ndotl = normal[0] * lightDir[0] +
+		normal[1] * lightDir[1] +
+		normal[2] * lightDir[2];
+
+	ndotl = ClampFloat(ndotl, 0.0f, 1.0f);
+
+	// ambient + diffuse * max(dot(N, L), 0)
+	return 0.25f + 0.75f * ndotl;
+}
+
+static void ApplyManualShadingToCurrentColor(const float normal[3])
+{
+	GLfloat baseColor[4];
+	glGetFloatv(GL_CURRENT_COLOR, baseColor);
+
+	float brightness = 1.0f;
+	if (showShadingDemo)
+		brightness = ComputeManualLambertBrightness(normal);
+
+	glColor4f(
+		ClampFloat(baseColor[0] * brightness, 0.0f, 1.0f),
+		ClampFloat(baseColor[1] * brightness, 0.0f, 1.0f),
+		ClampFloat(baseColor[2] * brightness, 0.0f, 1.0f),
+		baseColor[3]
+	);
+}
+
 static void ApplyTexCoord(const ObjModel& model, int texcoordIndex)
 {
 	if (texcoordIndex > 0 && texcoordIndex <= (int)model.texcoords.size())
@@ -1334,6 +1569,223 @@ static void ApplyNormal(const ObjModel& model, int normalIndex, const float face
 	{
 		glNormal3f(faceNormal[0], faceNormal[1], faceNormal[2]);
 	}
+}
+
+struct EdgeMidpoint
+{
+	int A;
+	int B;
+	int Midpoint;
+};
+
+static Vertex MakeVertex(float x, float y, float z)
+{
+	Vertex vertex;
+	vertex.X = x;
+	vertex.Y = y;
+	vertex.Z = z;
+	vertex.index_1 = 0;
+	vertex.index_2 = 0;
+	vertex.index_3 = 0;
+	return vertex;
+}
+
+static int AddMidpointVertex(ObjModel& model, vector<EdgeMidpoint>& edges, int indexA, int indexB)
+{
+	if (indexA > indexB)
+	{
+		int temp = indexA;
+		indexA = indexB;
+		indexB = temp;
+	}
+
+	for (size_t i = 0; i < edges.size(); i++)
+	{
+		if (edges[i].A == indexA && edges[i].B == indexB)
+			return edges[i].Midpoint;
+	}
+
+	if (indexA <= 0 || indexB <= 0 ||
+		indexA >(int)model.vertices.size() || indexB >(int)model.vertices.size())
+		return 0;
+
+	const Vertex& a = model.vertices[indexA - 1];
+	const Vertex& b = model.vertices[indexB - 1];
+	model.vertices.push_back(MakeVertex(
+		(a.X + b.X) * 0.5f,
+		(a.Y + b.Y) * 0.5f,
+		(a.Z + b.Z) * 0.5f));
+
+	EdgeMidpoint edge;
+	edge.A = indexA;
+	edge.B = indexB;
+	edge.Midpoint = (int)model.vertices.size();
+	edges.push_back(edge);
+	return edge.Midpoint;
+}
+
+static void AddTriangleFace(vector<MMesh>& faces, int v1, int v2, int v3, int materialId)
+{
+	MMesh face;
+	face.V1 = v1; face.V2 = v2; face.V3 = v3; face.V4 = 0;
+	face.T1 = 0; face.T2 = 0; face.T3 = 0; face.T4 = 0;
+	face.N1 = 0; face.N2 = 0; face.N3 = 0; face.N4 = 0;
+	face.VertexCount = 3;
+	face.MaterialId = materialId;
+	faces.push_back(face);
+}
+
+static void AddSubdividedTriangle(ObjModel& model, vector<EdgeMidpoint>& edges, vector<MMesh>& faces,
+	int v1, int v2, int v3, int materialId)
+{
+	int m12 = AddMidpointVertex(model, edges, v1, v2);
+	int m23 = AddMidpointVertex(model, edges, v2, v3);
+	int m31 = AddMidpointVertex(model, edges, v3, v1);
+
+	if (m12 == 0 || m23 == 0 || m31 == 0)
+		return;
+
+	AddTriangleFace(faces, v1, m12, m31, materialId);
+	AddTriangleFace(faces, m12, v2, m23, materialId);
+	AddTriangleFace(faces, m31, m23, v3, materialId);
+	AddTriangleFace(faces, m12, m23, m31, materialId);
+}
+
+static void AddNeighbor(vector<int>& neighbors, int neighbor)
+{
+	for (size_t i = 0; i < neighbors.size(); i++)
+	{
+		if (neighbors[i] == neighbor)
+			return;
+	}
+	neighbors.push_back(neighbor);
+}
+
+static void SmoothDogVertices(ObjModel& model, float smoothingFactor)
+{
+	vector<vector<int> > neighbors(model.vertices.size());
+
+	for (size_t i = 0; i < model.faces.size(); i++)
+	{
+		const MMesh& face = model.faces[i];
+		if (face.VertexCount != 3)
+			continue;
+
+		int v[3] = { face.V1, face.V2, face.V3 };
+		for (int j = 0; j < 3; j++)
+		{
+			int current = v[j] - 1;
+			if (current < 0 || current >= (int)neighbors.size())
+				continue;
+
+			AddNeighbor(neighbors[current], v[(j + 1) % 3] - 1);
+			AddNeighbor(neighbors[current], v[(j + 2) % 3] - 1);
+		}
+	}
+
+	vector<Vertex> smoothed = model.vertices;
+	for (size_t i = 0; i < model.vertices.size(); i++)
+	{
+		if (neighbors[i].empty())
+			continue;
+
+		float avgX = 0.0f;
+		float avgY = 0.0f;
+		float avgZ = 0.0f;
+		for (size_t j = 0; j < neighbors[i].size(); j++)
+		{
+			const Vertex& neighbor = model.vertices[neighbors[i][j]];
+			avgX += neighbor.X;
+			avgY += neighbor.Y;
+			avgZ += neighbor.Z;
+		}
+
+		float count = (float)neighbors[i].size();
+		avgX /= count;
+		avgY /= count;
+		avgZ /= count;
+
+		smoothed[i].X = model.vertices[i].X + (avgX - model.vertices[i].X) * smoothingFactor;
+		smoothed[i].Y = model.vertices[i].Y + (avgY - model.vertices[i].Y) * smoothingFactor;
+		smoothed[i].Z = model.vertices[i].Z + (avgZ - model.vertices[i].Z) * smoothingFactor;
+	}
+
+	model.vertices = smoothed;
+}
+
+static bool SubdivideDogOnce(const ObjModel& source, ObjModel& result)
+{
+	if (source.vertices.empty() || source.faces.empty())
+		return false;
+
+	result = source;
+	result.vertices = source.vertices;
+	result.texcoords.clear();
+	result.normals.clear();
+	result.faces.clear();
+	result.hasTexture = false;
+	result.hasNormals = false;
+
+	vector<EdgeMidpoint> edges;
+	vector<MMesh> subdividedFaces;
+
+	// Quads are split into two triangles, and each triangle becomes 4 triangles.
+	// Therefore, reserve more than 4x to avoid repeated reallocations.
+	subdividedFaces.reserve(source.faces.size() * 8);
+
+	for (size_t i = 0; i < source.faces.size(); i++)
+	{
+		const MMesh& face = source.faces[i];
+
+		if (face.VertexCount == 3)
+		{
+			AddSubdividedTriangle(result, edges, subdividedFaces,
+				face.V1, face.V2, face.V3, face.MaterialId);
+		}
+		else if (face.VertexCount == 4)
+		{
+			// Split quad into two triangles first, then subdivide each triangle.
+			AddSubdividedTriangle(result, edges, subdividedFaces,
+				face.V1, face.V2, face.V3, face.MaterialId);
+
+			AddSubdividedTriangle(result, edges, subdividedFaces,
+				face.V1, face.V3, face.V4, face.MaterialId);
+		}
+	}
+
+	result.faces = subdividedFaces;
+	return !result.vertices.empty() && !result.faces.empty();
+}
+
+bool BuildSubdividedDogModel(const ObjModel& source, ObjModel& result)
+{
+	if (source.vertices.empty() || source.faces.empty())
+		return false;
+
+	// Pass 1: original low-poly dog -> moderately subdivided dog.
+	ObjModel pass1;
+	if (!SubdivideDogOnce(source, pass1))
+		return false;
+
+	// Weak smoothing after the first pass.
+	SmoothDogVertices(pass1, 0.18f);
+
+	// Pass 2: subdivide again for a much denser polygon structure.
+	ObjModel pass2;
+	if (!SubdivideDogOnce(pass1, pass2))
+		return false;
+
+	// Even weaker smoothing after the second pass.
+	// Keep this small to avoid melting or shrinking the dog too much.
+	SmoothDogVertices(pass2, 0.12f);
+
+	result = pass2;
+
+	cout << "[Demo 2] Dog subdivision generated with 2 passes: "
+		<< source.vertices.size() << " vertices / " << source.faces.size() << " faces -> "
+		<< result.vertices.size() << " vertices / " << result.faces.size() << " faces" << endl;
+
+	return true;
 }
 
 static void ApplyTentMaterial(int materialId)
@@ -1520,6 +1972,7 @@ void DrawTentModel(const ObjModel& model)
 		ComputeFaceNormal(p[0], p[1], p[2], faceNormal);
 
 		ApplyTentMaterial(face.MaterialId);
+		ApplyManualShadingToCurrentColor(faceNormal);
 
 		if (face.VertexCount == 3)
 			glBegin(GL_TRIANGLES);
@@ -1562,6 +2015,7 @@ void DrawDogModel(const ObjModel& model)
 		ComputeFaceNormal(p[0], p[1], p[2], faceNormal);
 
 		ApplyDogMaterial(face.MaterialId);
+		ApplyManualShadingToCurrentColor(faceNormal);
 
 		if (face.VertexCount == 3)
 			glBegin(GL_TRIANGLES);
@@ -1583,10 +2037,20 @@ void DrawDogModel(const ObjModel& model)
 void DrawModel(const ObjModel& model, bool useTexture)
 {
 	bool bindTexture = useTexture && model.hasTexture && model.textureId != 0;
+
+	// Save the color that was set by the caller before DrawModel().
+	// Example: rock, wood, car, lantern each sets its own base color.
+	GLfloat baseColor[4];
+	glGetFloatv(GL_CURRENT_COLOR, baseColor);
+
 	if (bindTexture)
 	{
 		glEnable(GL_TEXTURE_2D);
 		glBindTexture(GL_TEXTURE_2D, model.textureId);
+
+		// Texture color * glColor.
+		// This makes the manual brightness affect textured OBJ models.
+		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 	}
 	else
 	{
@@ -1605,11 +2069,26 @@ void DrawModel(const ObjModel& model, bool useTexture)
 			!GetVertexByObjIndex(model, vIndex[1], &p[1]) ||
 			!GetVertexByObjIndex(model, vIndex[2], &p[2]))
 			continue;
+
 		if (face.VertexCount == 4 && !GetVertexByObjIndex(model, vIndex[3], &p[3]))
 			continue;
 
 		float faceNormal[3];
 		ComputeFaceNormal(p[0], p[1], p[2], faceNormal);
+
+		float brightness = 1.0f;
+		if (showShadingDemo)
+			brightness = ComputeManualLambertBrightness(faceNormal);
+
+		// Manual Lambert shading result.
+		// Shading ON  : base color/texture is multiplied by brightness.
+		// Shading OFF : brightness is 1.0, so the original color/texture is shown.
+		glColor4f(
+			ClampFloat(baseColor[0] * brightness, 0.0f, 1.0f),
+			ClampFloat(baseColor[1] * brightness, 0.0f, 1.0f),
+			ClampFloat(baseColor[2] * brightness, 0.0f, 1.0f),
+			baseColor[3]
+		);
 
 		if (face.VertexCount == 3)
 			glBegin(GL_TRIANGLES);
@@ -1619,18 +2098,28 @@ void DrawModel(const ObjModel& model, bool useTexture)
 		for (int j = 0; j < face.VertexCount; j++)
 		{
 			ApplyNormal(model, nIndex[j], faceNormal);
+
 			if (bindTexture)
 				ApplyTexCoord(model, tIndex[j]);
+
 			glVertex3f(p[j].X, p[j].Y, p[j].Z);
 		}
 
 		glEnd();
 	}
 
+	// Restore the caller's color so the next object is not affected by the last face.
+	glColor4f(baseColor[0], baseColor[1], baseColor[2], baseColor[3]);
+
 	if (bindTexture)
+	{
 		glBindTexture(GL_TEXTURE_2D, 0);
-	else
 		glDisable(GL_TEXTURE_2D);
+	}
+	else
+	{
+		glDisable(GL_TEXTURE_2D);
+	}
 }
 
 void DrawTreeModel(const ObjModel& model)
@@ -1691,6 +2180,9 @@ void DrawTreeModel(const ObjModel& model)
 		{
 			glEnable(GL_TEXTURE_2D);
 			glBindTexture(GL_TEXTURE_2D, textureId);
+
+			// Texture color * manual shading color.
+			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 		}
 
 		if (useAlphaTest)
@@ -1698,6 +2190,8 @@ void DrawTreeModel(const ObjModel& model)
 			glEnable(GL_ALPHA_TEST);
 			glAlphaFunc(GL_GREATER, 0.35f);
 		}
+
+		ApplyManualShadingToCurrentColor(faceNormal);
 
 		if (face.VertexCount == 3)
 			glBegin(GL_TRIANGLES);
@@ -1737,7 +2231,7 @@ void DrawTreeInstance(float x, float y, float z, float scaleValue, float rotateY
 
 	glPushMatrix();
 	glTranslatef(x, y, z);
-	glRotatef(rotateY, 0.0f, 1.0f, 0.0f);
+	glRotatef(rotateY, 0.0f, 1.0f, 0.0f);		
 	glScalef(scaleValue, scaleValue, scaleValue);
 	DrawTreeModel(treeModel);
 	glPopMatrix();
@@ -1787,14 +2281,14 @@ void DrawCampingCarInstance(float x, float y, float z, float scaleValue, float r
 void DrawPicnicTableInstance(float x, float y, float z, float scaleValue, float rotateY)
 {
 	// Picnic Table Instance: lightweight textured table placed near the campfire.
-	GLfloat picnic_ambient[4] = { 0.34f, 0.23f, 0.14f, 1.0f };
-	GLfloat picnic_diffuse[4] = { 0.68f, 0.45f, 0.26f, 1.0f };
-	GLfloat picnic_specular[4] = { 0.12f, 0.08f, 0.05f, 1.0f };
+	GLfloat picnic_ambient[4] = { 0.42f, 0.29f, 0.18f, 1.0f };
+	GLfloat picnic_diffuse[4] = { 0.78f, 0.53f, 0.31f, 1.0f };
+	GLfloat picnic_specular[4] = { 0.16f, 0.11f, 0.07f, 1.0f };
 	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, picnic_ambient);
 	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, picnic_diffuse);
 	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, picnic_specular);
 	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 8.0f);
-	glColor3f(0.68f, 0.45f, 0.26f);
+	glColor3f(0.78f, 0.53f, 0.31f);
 
 	glPushMatrix();
 	glTranslatef(x, y, z);
@@ -1826,16 +2320,163 @@ void DrawButterflyInstance(float x, float y, float z, float scaleValue, float ro
 	glPopMatrix();
 }
 
-void DrawDogInstance(float x, float y, float z, float scaleValue, float rotateY)
+static void DrawWatermelonWireframeModel(const ObjModel& model, float alpha)
 {
-	// Dog Orientation Fix: this OBJ already stands along scene Y, so yaw only.
+	if (model.vertices.empty() || model.faces.empty())
+		return;
+
+	glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT | GL_LINE_BIT |
+		GL_POLYGON_BIT | GL_DEPTH_BUFFER_BIT | GL_LIGHTING_BIT | GL_TEXTURE_BIT);
+
+	glDisable(GL_LIGHTING);
 	glDisable(GL_TEXTURE_2D);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glEnable(GL_POLYGON_OFFSET_LINE);
+	glPolygonOffset(-1.0f, -1.0f);
+	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	glLineWidth(0.75f);
+	glColor4f(0.93f, 0.98f, 0.88f, alpha);
+
+	for (size_t i = 0; i < model.faces.size(); i++)
+	{
+		const MMesh& face = model.faces[i];
+		int vIndex[4] = { face.V1, face.V2, face.V3, face.V4 };
+		Vertex p[4];
+
+		if (!GetVertexByObjIndex(model, vIndex[0], &p[0]) ||
+			!GetVertexByObjIndex(model, vIndex[1], &p[1]) ||
+			!GetVertexByObjIndex(model, vIndex[2], &p[2]))
+			continue;
+
+		if (face.VertexCount == 4 && !GetVertexByObjIndex(model, vIndex[3], &p[3]))
+			continue;
+
+		if (face.VertexCount == 3)
+			glBegin(GL_TRIANGLES);
+		else
+			glBegin(GL_QUADS);
+
+		for (int j = 0; j < face.VertexCount; j++)
+			glVertex3f(p[j].X, p[j].Y, p[j].Z);
+
+		glEnd();
+	}
+
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	glPopAttrib();
+}
+
+void DrawWatermelonInstance(float x, float y, float z, float scaleValue, float rotateY)
+{
+	const ObjModel& drawModel = (showSimplificationDemo && !simplifiedWatermelonModel.faces.empty())
+		? simplifiedWatermelonModel
+		: watermelonModel;
+
+	if (drawModel.vertices.empty() || drawModel.faces.empty())
+		return;
+
+	GLfloat watermelon_ambient[4] = { 0.42f, 0.50f, 0.34f, 1.0f };
+	GLfloat watermelon_diffuse[4] = { 0.88f, 0.96f, 0.72f, 1.0f };
+	GLfloat watermelon_specular[4] = { 0.12f, 0.16f, 0.10f, 1.0f };
+	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, watermelon_ambient);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, watermelon_diffuse);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, watermelon_specular);
+	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 8.0f);
+	glColor3f(0.90f, 0.98f, 0.78f);
 
 	glPushMatrix();
 	glTranslatef(x, y, z);
 	glRotatef(rotateY, 0.0f, 1.0f, 0.0f);
 	glScalef(scaleValue, scaleValue, scaleValue);
-	DrawDogModel(dogModel);
+	DrawModel(drawModel, true);
+
+	if (showSimplificationDemo && !simplifiedWatermelonModel.faces.empty())
+		DrawWatermelonWireframeModel(drawModel, 0.16f);
+
+	glPopMatrix();
+}
+static void DrawDogWireframeModel(const ObjModel& model, float alpha)
+{
+	if (model.vertices.empty() || model.faces.empty())
+		return;
+
+	glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT | GL_LINE_BIT |
+		GL_POLYGON_BIT | GL_DEPTH_BUFFER_BIT | GL_LIGHTING_BIT | GL_TEXTURE_BIT);
+
+	glDisable(GL_LIGHTING);
+	glDisable(GL_TEXTURE_2D);
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	// Draw wireframe slightly above the filled dog surface to reduce z-fighting.
+	glEnable(GL_POLYGON_OFFSET_LINE);
+	glPolygonOffset(-1.0f, -1.0f);
+
+	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+	// Low-poly mode uses thicker lines so the original large polygons are obvious.
+	if (showSubdivisionDemo)
+		glLineWidth(1.0f);
+	else
+		glLineWidth(1.5f);
+
+	// Dark transparent wireframe overlay.
+	glColor4f(0.12f, 0.08f, 0.04f, alpha);
+
+	for (size_t i = 0; i < model.faces.size(); i++)
+	{
+		const MMesh& face = model.faces[i];
+		int vIndex[4] = { face.V1, face.V2, face.V3, face.V4 };
+		Vertex p[4];
+
+		if (!GetVertexByObjIndex(model, vIndex[0], &p[0]) ||
+			!GetVertexByObjIndex(model, vIndex[1], &p[1]) ||
+			!GetVertexByObjIndex(model, vIndex[2], &p[2]))
+			continue;
+
+		if (face.VertexCount == 4 && !GetVertexByObjIndex(model, vIndex[3], &p[3]))
+			continue;
+
+		if (face.VertexCount == 3)
+			glBegin(GL_TRIANGLES);
+		else
+			glBegin(GL_QUADS);
+
+		for (int j = 0; j < face.VertexCount; j++)
+			glVertex3f(p[j].X, p[j].Y, p[j].Z);
+
+		glEnd();
+	}
+
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	glPopAttrib();
+}
+
+void DrawDogInstance(float x, float y, float z, float scaleValue, float rotateY)
+{
+	// Dog Orientation Fix: this OBJ already stands along scene Y, so yaw only.
+	glDisable(GL_TEXTURE_2D);
+
+	const ObjModel& drawModel = (showSubdivisionDemo && !dogSubdividedModel.faces.empty())
+		? dogSubdividedModel
+		: dogModel;
+
+	glPushMatrix();
+	glTranslatef(x, y, z);
+	glRotatef(rotateY, 0.0f, 1.0f, 0.0f);
+	glScalef(scaleValue, scaleValue, scaleValue);
+
+	// First draw the filled dog with its existing material colors.
+	DrawDogModel(drawModel);
+
+	// Then draw wireframe overlay to make the subdivision difference visible.
+	if (showSubdivisionDemo)
+		DrawDogWireframeModel(drawModel, 0.12f);
+	else
+		DrawDogWireframeModel(drawModel, 0.38f);
+
 	glPopMatrix();
 }
 
@@ -1877,7 +2518,17 @@ int main(int argc, char* argv[])
 	// Dog Asset: mesh only; the provided dog texture path is not usable in this project.
 	if (!LoadObj("assets/dog/GermanShephardLowPoly.obj", dogModel, 9.0f))
 		cout << "Dog OBJ failed to load; continuing without dog." << endl;
+	else if (!BuildSubdividedDogModel(dogModel, dogSubdividedModel))
+		cout << "Dog subdivision failed; using original dog model." << endl;
 
+	// Demo 3 Watermelon Asset: textured prop and vertex-clustered simplified mesh.
+	if (!LoadObj("assets/Watermelon/Watermelon_SF.obj", watermelonModel, 15.0f))
+		cout << "[Demo 3] Watermelon OBJ failed to load; continuing without watermelon." << endl;
+	else
+	{
+		cout << "[Demo 3] Loaded watermelon: " << watermelonModel.vertices.size()
+			<< " vertices / " << watermelonModel.faces.size() << " faces" << endl;
+	}
 	InitializeWindow(argc, argv);
 
 	// Ground Texture Loading: use only the simple diffuse/base color JPG.
@@ -1911,6 +2562,12 @@ int main(int argc, char* argv[])
 	butterflyModel.textureId = LoadTexture("assets/butterfly/MONARCH.JPG");
 	butterflyModel.hasTexture = butterflyModel.textureId != 0;
 
+	// Watermelon Texture Loading: use only the visible diffuse texture.
+	watermelonModel.textureId = LoadTexture("assets/Watermelon/Watermelon.jpg");
+	watermelonModel.hasTexture = watermelonModel.textureId != 0;
+	if (!watermelonModel.vertices.empty() && !BuildSimplifiedWatermelonModel(watermelonModel, simplifiedWatermelonModel, 0.035f))
+		cout << "[Demo 3] Simplification failed; original watermelon remains available." << endl;
+
 	// Texture Loading: fir tree uses bark for trunk and branch PNG for leaves.
 	treeModel.barkTextureId = LoadTexture("assets/tree/bark.jpg");
 	treeModel.branchTextureId = LoadTexture("assets/tree/branch.png");
@@ -1941,6 +2598,8 @@ int main(int argc, char* argv[])
 		glDeleteTextures(1, &picnicTableModel.textureId);
 	if (butterflyModel.textureId != 0)
 		glDeleteTextures(1, &butterflyModel.textureId);
+	if (watermelonModel.textureId != 0)
+		glDeleteTextures(1, &watermelonModel.textureId);
 	if (treeModel.barkTextureId != 0)
 		glDeleteTextures(1, &treeModel.barkTextureId);
 	if (treeModel.branchTextureId != 0)
