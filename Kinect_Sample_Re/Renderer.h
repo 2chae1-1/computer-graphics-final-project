@@ -52,6 +52,7 @@ struct ObjModel {
 	vector<Vertex> vertices;
 	vector<Vertex> texcoords;
 	vector<Vertex> normals;
+	vector<Vertex> smoothNormals;
 	vector<MMesh> faces;
 	GLuint textureId;
 	GLuint barkTextureId;
@@ -60,6 +61,7 @@ struct ObjModel {
 	bool hasBarkTexture;
 	bool hasBranchTexture;
 	bool hasNormals;
+	bool hasSmoothNormals;
 };
 
 // variables for GUI
@@ -150,6 +152,7 @@ void DrawGroundGlow(float x, float y, float z, float scaleX, float scaleZ, float
 void DrawVerticalGlow(float x, float y, float z, float scaleX, float scaleY, float alpha, float red, float green, float blue);
 void DrawCampfireSmoke(float x, float y, float z, float sceneTime);
 bool LoadObj(const char* path, ObjModel& model, float scaleValue);
+void BuildSmoothVertexNormals(ObjModel& model);
 bool BuildSubdividedDogModel(const ObjModel& source, ObjModel& result);
 bool BuildSimplifiedWatermelonModel(const ObjModel& source, ObjModel& result, float gridCellSize);
 GLuint LoadTexture(const char* path);

@@ -169,10 +169,7 @@ void mouse(int button, int state, int x, int y)
 		{
 			rot_x = x;
 			rot_y = y;
-
 			//t[0] = t[0] + 1;
-
-
 		}
 		else if (button == GLUT_RIGHT_BUTTON)
 		{
@@ -410,7 +407,7 @@ void keyboard(unsigned char key, int x, int y)
 	switch (key)
 	{
 	case '1':
-		// Demo key 1: toggle the hand-written face-normal Lambert shading.
+		// Demo key 1: toggle fixed-function Gouraud shading with a Phong reflection model.
 		showShadingDemo = !showShadingDemo;
 		cout << "[Demo 1] Shading: " << (showShadingDemo ? "ON" : "OFF") << endl;
 		break;
@@ -451,16 +448,33 @@ void keyboard(unsigned char key, int x, int y)
 
 void ApplyShadingDemoState()
 {
-	// Manual Lambert shading will be calculated in DrawModel().
-	// Therefore, fixed-function OpenGL lighting must stay off.
-	glDisable(GL_LIGHTING);
-	glDisable(GL_LIGHT0);
-	glDisable(GL_LIGHT1);
-	glDisable(GL_LIGHT2);
-	glDisable(GL_NORMALIZE);
+	if (showShadingDemo)
+	{
+		GLfloat lightAmbient[4] = { 0.18f, 0.16f, 0.14f, 1.0f };
+		GLfloat lightDiffuse[4] = { 0.90f, 0.82f, 0.68f, 1.0f };
+		GLfloat lightSpecular[4] = { 0.75f, 0.65f, 0.50f, 1.0f };
+		GLfloat lightPosition[4] = { -1.2f, 2.4f, 2.0f, 1.0f };
 
-	// One brightness value per polygon face.
-	glShadeModel(GL_FLAT);
+		glEnable(GL_LIGHTING);
+		glEnable(GL_LIGHT0);
+		glEnable(GL_NORMALIZE);
+		glEnable(GL_COLOR_MATERIAL);
+		glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+		glShadeModel(GL_SMOOTH);
+
+		glLightfv(GL_LIGHT0, GL_AMBIENT, lightAmbient);
+		glLightfv(GL_LIGHT0, GL_DIFFUSE, lightDiffuse);
+		glLightfv(GL_LIGHT0, GL_SPECULAR, lightSpecular);
+		glLightfv(GL_LIGHT0, GL_POSITION, lightPosition);
+	}
+	else
+	{
+		glDisable(GL_LIGHTING);
+		glDisable(GL_LIGHT0);
+		glDisable(GL_NORMALIZE);
+		glDisable(GL_COLOR_MATERIAL);
+		glShadeModel(GL_FLAT);
+	}
 }
 
 void DrawDuskBackground()
@@ -897,7 +911,7 @@ void display()
 	if (showShadingDemo)
 	{
 		// The warm fire effect is drawn with glow geometry.
-		// Fixed-function GL_LIGHT1 is not used because manual shading is required.
+		// Fixed-function GL_LIGHT1 stays off so the visible glow geometry remains the fire effect.
 		DrawGroundGlow(CAMPFIRE_X, GROUND_Y - 0.020f, CAMPFIRE_Z, 0.62f, 0.44f, 0.27f * flicker, 1.0f, 0.38f, 0.08f);
 		DrawVerticalGlow(CAMPFIRE_X, CAMPFIRE_Y + 0.24f, CAMPFIRE_Z, 0.18f, 0.28f, 0.25f * flicker, 1.0f, 0.46f, 0.10f);
 	}
@@ -926,7 +940,7 @@ void display()
 	const float LANTERN_Z = TABLE_Z - TABLE_LONG_DIR_Z * TABLE_PROP_OFFSET;
 	const float LANTERN_SCALE = 0.18f;
 	// Lantern brightness comes from material color; fixed-function GL_LIGHT2 stays off
-	// because the project uses manual face-normal shading.
+	// so Demo 1 keeps a single clear GL_LIGHT0 shading setup.
 	GLfloat lantern_ambient[4] = { 0.50f, 0.44f, 0.34f, 1.0f };
 	GLfloat lantern_diffuse[4] = { 0.95f, 0.84f, 0.62f, 1.0f };
 	GLfloat lantern_specular[4] = { 0.35f, 0.30f, 0.22f, 1.0f };
@@ -946,7 +960,7 @@ void display()
 	if (showShadingDemo)
 	{
 		// Lantern glow: visible blended geometry, not fixed-function GL_LIGHT.
-		// This keeps the manual Lambert shading demo consistent.
+		// This keeps Demo 1 focused on the campsite models rather than extra light sources.
 		DrawGroundGlow(
 			LANTERN_X, LANTERN_Y - 0.035f, LANTERN_Z,
 			0.18f, 0.11f, 0.12f,
@@ -1106,6 +1120,7 @@ bool LoadObj(const char* path, ObjModel& model, float scaleValue)
 	model.vertices.clear();
 	model.texcoords.clear();
 	model.normals.clear();
+	model.smoothNormals.clear();
 	model.faces.clear();
 	model.textureId = 0;
 	model.barkTextureId = 0;
@@ -1114,6 +1129,7 @@ bool LoadObj(const char* path, ObjModel& model, float scaleValue)
 	model.hasBarkTexture = false;
 	model.hasBranchTexture = false;
 	model.hasNormals = false;
+	model.hasSmoothNormals = false;
 
 	int currentMaterialId = TREE_MATERIAL_NONE;
 	char line[512];
@@ -1284,6 +1300,7 @@ bool LoadObj(const char* path, ObjModel& model, float scaleValue)
 	fclose(fp);
 
 	model.hasNormals = !model.normals.empty();
+	BuildSmoothVertexNormals(model);
 	cout << "Loaded " << path << ": " << model.vertices.size() << " vertices, "
 		<< model.texcoords.size() << " texcoords, "
 		<< model.normals.size() << " normals, "
@@ -1339,6 +1356,7 @@ bool BuildSimplifiedWatermelonModel(const ObjModel& source, ObjModel& result, fl
 	result.vertices.clear();
 	result.texcoords = source.texcoords;
 	result.normals.clear();
+	result.smoothNormals.clear();
 	result.faces.clear();
 	result.textureId = source.textureId;
 	result.barkTextureId = source.barkTextureId;
@@ -1347,6 +1365,7 @@ bool BuildSimplifiedWatermelonModel(const ObjModel& source, ObjModel& result, fl
 	result.hasBarkTexture = source.hasBarkTexture;
 	result.hasBranchTexture = source.hasBranchTexture;
 	result.hasNormals = false;
+	result.hasSmoothNormals = false;
 
 	if (source.vertices.empty() || source.faces.empty())
 	{
@@ -1448,6 +1467,8 @@ bool BuildSimplifiedWatermelonModel(const ObjModel& source, ObjModel& result, fl
 			result.faces.push_back(face);
 	}
 
+	BuildSmoothVertexNormals(result);
+
 	cout << "[Demo 3] Watermelon simplification: "
 		<< source.vertices.size() << " vertices / " << source.faces.size() << " faces -> "
 		<< result.vertices.size() << " vertices / " << result.faces.size() << " faces" << endl;
@@ -1534,59 +1555,74 @@ static void ComputeFaceNormal(const Vertex& p1, const Vertex& p2, const Vertex& 
 	}
 }
 
-static float ClampFloat(float value, float minValue, float maxValue)
+// Demo 1 Gouraud shading: average adjacent face normals into one normal per vertex.
+void BuildSmoothVertexNormals(ObjModel& model)
 {
-	if (value < minValue)
-		return minValue;
-	if (value > maxValue)
-		return maxValue;
-	return value;
-}
+	model.smoothNormals.clear();
+	model.hasSmoothNormals = false;
 
-static float ComputeManualLambertBrightness(const float normal[3])
-{
-	// Directional light for the manual shading demo.
-	// Change this vector slightly if you want the bright side to face another direction.
-	float lightDir[3] = { -0.45f, 0.85f, 0.35f };
+	if (model.vertices.empty() || model.faces.empty())
+		return;
 
-	float length = sqrt(lightDir[0] * lightDir[0] +
-		lightDir[1] * lightDir[1] +
-		lightDir[2] * lightDir[2]);
-
-	if (length > 0.00001f)
+	model.smoothNormals.resize(model.vertices.size());
+	for (size_t i = 0; i < model.smoothNormals.size(); i++)
 	{
-		lightDir[0] /= length;
-		lightDir[1] /= length;
-		lightDir[2] /= length;
+		model.smoothNormals[i].X = 0.0f;
+		model.smoothNormals[i].Y = 0.0f;
+		model.smoothNormals[i].Z = 0.0f;
+		model.smoothNormals[i].index_1 = 0;
+		model.smoothNormals[i].index_2 = 0;
+		model.smoothNormals[i].index_3 = 0;
 	}
 
-	float ndotl = normal[0] * lightDir[0] +
-		normal[1] * lightDir[1] +
-		normal[2] * lightDir[2];
+	for (size_t i = 0; i < model.faces.size(); i++)
+	{
+		const MMesh& face = model.faces[i];
+		int vIndex[4] = { face.V1, face.V2, face.V3, face.V4 };
+		Vertex p[3];
 
-	ndotl = ClampFloat(ndotl, 0.0f, 1.0f);
+		if (!GetVertexByObjIndex(model, vIndex[0], &p[0]) ||
+			!GetVertexByObjIndex(model, vIndex[1], &p[1]) ||
+			!GetVertexByObjIndex(model, vIndex[2], &p[2]))
+			continue;
 
-	// ambient + diffuse * max(dot(N, L), 0)
-	return 0.25f + 0.75f * ndotl;
+		float faceNormal[3];
+		ComputeFaceNormal(p[0], p[1], p[2], faceNormal);
+
+		for (int j = 0; j < face.VertexCount && j < 4; j++)
+		{
+			int vertexIndex = vIndex[j] - 1;
+			if (vertexIndex < 0 || vertexIndex >= (int)model.smoothNormals.size())
+				continue;
+
+			model.smoothNormals[vertexIndex].X += faceNormal[0];
+			model.smoothNormals[vertexIndex].Y += faceNormal[1];
+			model.smoothNormals[vertexIndex].Z += faceNormal[2];
+		}
+	}
+
+	for (size_t i = 0; i < model.smoothNormals.size(); i++)
+	{
+		Vertex& normal = model.smoothNormals[i];
+		float length = sqrt(normal.X * normal.X + normal.Y * normal.Y + normal.Z * normal.Z);
+		if (length > 0.00001f)
+		{
+			normal.X /= length;
+			normal.Y /= length;
+			normal.Z /= length;
+		}
+		else
+		{
+			normal.X = 0.0f;
+			normal.Y = 1.0f;
+			normal.Z = 0.0f;
+		}
+	}
+
+	model.hasSmoothNormals = true;
+	cout << "[Demo 1] Smooth vertex normals generated: "
+		<< model.smoothNormals.size() << " normals" << endl;
 }
-
-static void ApplyManualShadingToCurrentColor(const float normal[3])
-{
-	GLfloat baseColor[4];
-	glGetFloatv(GL_CURRENT_COLOR, baseColor);
-
-	float brightness = 1.0f;
-	if (showShadingDemo)
-		brightness = ComputeManualLambertBrightness(normal);
-
-	glColor4f(
-		ClampFloat(baseColor[0] * brightness, 0.0f, 1.0f),
-		ClampFloat(baseColor[1] * brightness, 0.0f, 1.0f),
-		ClampFloat(baseColor[2] * brightness, 0.0f, 1.0f),
-		baseColor[3]
-	);
-}
-
 static void ApplyTexCoord(const ObjModel& model, int texcoordIndex)
 {
 	if (texcoordIndex > 0 && texcoordIndex <= (int)model.texcoords.size())
@@ -1596,9 +1632,16 @@ static void ApplyTexCoord(const ObjModel& model, int texcoordIndex)
 	}
 }
 
-static void ApplyNormal(const ObjModel& model, int normalIndex, const float faceNormal[3])
+// Demo 1 normal selection: smooth generated normals are used only while the shading demo is active.
+static void ApplySmoothNormal(const ObjModel& model, int vertexIndex, int normalIndex, const float faceNormal[3])
 {
-	if (normalIndex > 0 && normalIndex <= (int)model.normals.size())
+	if (showShadingDemo && model.hasSmoothNormals &&
+		vertexIndex > 0 && vertexIndex <= (int)model.smoothNormals.size())
+	{
+		const Vertex& normal = model.smoothNormals[vertexIndex - 1];
+		glNormal3f(normal.X, normal.Y, normal.Z);
+	}
+	else if (normalIndex > 0 && normalIndex <= (int)model.normals.size())
 	{
 		const Vertex& normal = model.normals[normalIndex - 1];
 		glNormal3f(normal.X, normal.Y, normal.Z);
@@ -1760,9 +1803,11 @@ static bool SubdivideDogOnce(const ObjModel& source, ObjModel& result)
 	result.vertices = source.vertices;
 	result.texcoords.clear();
 	result.normals.clear();
+	result.smoothNormals.clear();
 	result.faces.clear();
 	result.hasTexture = false;
 	result.hasNormals = false;
+	result.hasSmoothNormals = false;
 
 	vector<EdgeMidpoint> edges;
 	vector<MMesh> subdividedFaces;
@@ -1820,6 +1865,7 @@ bool BuildSubdividedDogModel(const ObjModel& source, ObjModel& result)
 	SmoothDogVertices(pass2, 0.12f);
 
 	result = pass2;
+	BuildSmoothVertexNormals(result);
 
 	cout << "[Demo 2] Dog subdivision generated with 2 passes: "
 		<< source.vertices.size() << " vertices / " << source.faces.size() << " faces -> "
@@ -2012,7 +2058,6 @@ void DrawTentModel(const ObjModel& model)
 		ComputeFaceNormal(p[0], p[1], p[2], faceNormal);
 
 		ApplyTentMaterial(face.MaterialId);
-		ApplyManualShadingToCurrentColor(faceNormal);
 
 		if (face.VertexCount == 3)
 			glBegin(GL_TRIANGLES);
@@ -2021,7 +2066,7 @@ void DrawTentModel(const ObjModel& model)
 
 		for (int j = 0; j < face.VertexCount; j++)
 		{
-			ApplyNormal(model, nIndex[j], faceNormal);
+			ApplySmoothNormal(model, vIndex[j], nIndex[j], faceNormal);
 			glVertex3f(p[j].X, p[j].Y, p[j].Z);
 		}
 
@@ -2055,7 +2100,6 @@ void DrawDogModel(const ObjModel& model)
 		ComputeFaceNormal(p[0], p[1], p[2], faceNormal);
 
 		ApplyDogMaterial(face.MaterialId);
-		ApplyManualShadingToCurrentColor(faceNormal);
 
 		if (face.VertexCount == 3)
 			glBegin(GL_TRIANGLES);
@@ -2064,7 +2108,7 @@ void DrawDogModel(const ObjModel& model)
 
 		for (int j = 0; j < face.VertexCount; j++)
 		{
-			ApplyNormal(model, nIndex[j], faceNormal);
+			ApplySmoothNormal(model, vIndex[j], nIndex[j], faceNormal);
 			glVertex3f(p[j].X, p[j].Y, p[j].Z);
 		}
 
@@ -2090,8 +2134,7 @@ void DrawModel(const ObjModel& model, bool useTexture)
 		glEnable(GL_TEXTURE_2D);
 		glBindTexture(GL_TEXTURE_2D, model.textureId);
 
-		// Texture color * glColor.
-		// This makes the manual brightness affect textured OBJ models.
+		// Texture color * glColor, so diffuse textures still respond to lighting.
 		glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 	}
 	else
@@ -2118,19 +2161,7 @@ void DrawModel(const ObjModel& model, bool useTexture)
 		float faceNormal[3];
 		ComputeFaceNormal(p[0], p[1], p[2], faceNormal);
 
-		float brightness = 1.0f;
-		if (showShadingDemo)
-			brightness = ComputeManualLambertBrightness(faceNormal);
-
-		// Manual Lambert shading result.
-		// Shading ON  : base color/texture is multiplied by brightness.
-		// Shading OFF : brightness is 1.0, so the original color/texture is shown.
-		glColor4f(
-			ClampFloat(baseColor[0] * brightness, 0.0f, 1.0f),
-			ClampFloat(baseColor[1] * brightness, 0.0f, 1.0f),
-			ClampFloat(baseColor[2] * brightness, 0.0f, 1.0f),
-			baseColor[3]
-		);
+		glColor4f(baseColor[0], baseColor[1], baseColor[2], baseColor[3]);
 
 		if (face.VertexCount == 3)
 			glBegin(GL_TRIANGLES);
@@ -2139,7 +2170,7 @@ void DrawModel(const ObjModel& model, bool useTexture)
 
 		for (int j = 0; j < face.VertexCount; j++)
 		{
-			ApplyNormal(model, nIndex[j], faceNormal);
+			ApplySmoothNormal(model, vIndex[j], nIndex[j], faceNormal);
 
 			if (bindTexture)
 				ApplyTexCoord(model, tIndex[j]);
@@ -2223,7 +2254,7 @@ void DrawTreeModel(const ObjModel& model)
 			glEnable(GL_TEXTURE_2D);
 			glBindTexture(GL_TEXTURE_2D, textureId);
 
-			// Texture color * manual shading color.
+			// Texture color * glColor, so branch and bark textures still respond to lighting.
 			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 		}
 
@@ -2233,7 +2264,6 @@ void DrawTreeModel(const ObjModel& model)
 			glAlphaFunc(GL_GREATER, 0.35f);
 		}
 
-		ApplyManualShadingToCurrentColor(faceNormal);
 
 		if (face.VertexCount == 3)
 			glBegin(GL_TRIANGLES);
@@ -2242,7 +2272,7 @@ void DrawTreeModel(const ObjModel& model)
 
 		for (int j = 0; j < face.VertexCount; j++)
 		{
-			ApplyNormal(model, nIndex[j], faceNormal);
+			ApplySmoothNormal(model, vIndex[j], nIndex[j], faceNormal);
 			if (useTexture)
 				ApplyTexCoord(model, tIndex[j]);
 			glVertex3f(p[j].X, p[j].Y, p[j].Z);
