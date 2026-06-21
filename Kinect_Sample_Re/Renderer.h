@@ -45,6 +45,9 @@ struct MMesh {
 	int MaterialId;
 };
 
+// OBJ asset container used by the campsite renderer.
+// It keeps the parsed geometry, optional texture ids, and simple material flags
+// so the old OpenGL template can draw several OBJ files without a full MTL system.
 struct ObjModel {
 	vector<Vertex> vertices;
 	vector<Vertex> texcoords;
@@ -74,23 +77,9 @@ GLint trans_x = 0;
 GLint trans_y = 0;
 GLint trans_z = 0;
 
-GLubyte mytexels[2048][2048][3];
-
-int add_depth_flag = 0;
-int model_flag = 0;
-int depth_display_flag = 0;
-int geodesic_skel[23][5] = { 0 };
-int trcon = 0;
-float zmin = 100000, zmax = -100000;
-
-int side_status[50] = { 0 };
-
 float quat[4] = {0};
 float t[3] = {0};
 
-Vertex skt[23];
-BOOLEAN bTracked = false;
-bool checkt = false;
 ObjModel tentModel;
 ObjModel campfireModel;
 ObjModel treeModel;
@@ -112,19 +101,9 @@ bool showShadingDemo = true;
 bool showSubdivisionDemo = true;
 bool showSimplificationDemo = false;
 
-bool recheck;
-
 // variables for display OpenGL based point viewer
 int dispWindowIndex = 0;
 GLuint dispBindIndex = 0;
-const float dispPointSize = 2.0f;
-
-// variables for display text
-string dispString = "";
-const string dispStringInit = "Depth Threshold: D\nInfrared Threshold: I\nNonlocal Means Filter: N\nPick BodyIndex: P\nAccumulate Mode: A\nSelect Mode: C,B(select)\nSave: S\nReset View: R\nQuit: ESC";
-string frameRate;
-
-HANDLE hMutex;
 //KinectBasic kinect;
 
 // functions for GUIs
@@ -162,10 +141,8 @@ void axis_to_quat(float a[3], float phi, float q[4]);
 void normalize_quat(float q[4]);
 float tb_project_to_sphere(float, float, float);
 void build_rotmatrix(float m[4][4], float q[4]);
-void Reader();
 void DrawObj();
 void DrawMeshObj();
-void Setskt();
 void DrawDuskBackground();
 void ApplyShadingDemoState();
 void DrawFakeShadow(float x, float y, float z, float scaleX, float scaleZ, float alpha);
@@ -189,4 +166,3 @@ void DrawDogInstance(float x, float y, float z, float scaleValue, float rotateY)
 void DrawWatermelonInstance(float x, float y, float z, float scaleValue, float rotateY);
 
 //CameraSpacePoint m_SpacePoint[JointType::JointType_Count];
-void Track();

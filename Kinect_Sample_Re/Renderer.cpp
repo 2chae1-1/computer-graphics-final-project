@@ -41,18 +41,48 @@ void idle() {
 	if (deltaT < 1000.0 / 20.0) { return; }
 	else { previousClock = currentClock; }
 
-	//char buff[256];
-	//sprintf_s(buff, "Frame Rate = %f", 1000.0 / deltaT);
-	//frameRate = buff;
-
 	glutPostRedisplay();
+}
+
+static void DeleteTextureIfCreated(GLuint& textureId)
+{
+	if (textureId != 0)
+	{
+		glDeleteTextures(1, &textureId);
+		textureId = 0;
+	}
+}
+
+static void ReleaseModelTextures(ObjModel& model)
+{
+	DeleteTextureIfCreated(model.textureId);
+	DeleteTextureIfCreated(model.barkTextureId);
+	DeleteTextureIfCreated(model.branchTextureId);
+	model.hasTexture = false;
+	model.hasBarkTexture = false;
+	model.hasBranchTexture = false;
+}
+
+static void ReleaseAllTextures()
+{
+	DeleteTextureIfCreated(dispBindIndex);
+	DeleteTextureIfCreated(groundTextureId);
+	DeleteTextureIfCreated(mountainTextureId);
+	ReleaseModelTextures(campfireModel);
+	ReleaseModelTextures(lanternModel);
+	ReleaseModelTextures(rockModel);
+	ReleaseModelTextures(woodModel);
+	ReleaseModelTextures(campingCarModel);
+	ReleaseModelTextures(picnicTableModel);
+	ReleaseModelTextures(butterflyModel);
+	ReleaseModelTextures(watermelonModel);
+	ReleaseModelTextures(treeModel);
 }
 
 void close()
 {
-	glDeleteTextures(1, &dispBindIndex);
+	ReleaseAllTextures();
 	glutLeaveMainLoop();
-	CloseHandle(hMutex);
 }
 
 void add_quats(float q1[4], float q2[4], float dest[4])
@@ -151,7 +181,6 @@ void mouse(int button, int state, int x, int y)
 		}
 		else if (button == GLUT_MIDDLE_BUTTON)
 		{
-			//trcon = trcon + 1;
 			trans_z = y;
 		}
 		else if (button == 3 || button == 4)
@@ -381,17 +410,20 @@ void keyboard(unsigned char key, int x, int y)
 	switch (key)
 	{
 	case '1':
+		// Demo key 1: toggle the hand-written face-normal Lambert shading.
 		showShadingDemo = !showShadingDemo;
 		cout << "[Demo 1] Shading: " << (showShadingDemo ? "ON" : "OFF") << endl;
 		break;
 
 	case '2':
+		// Demo key 2: switch between original dog and custom subdivided dog.
 		showSubdivisionDemo = !showSubdivisionDemo;
 		cout << "[Demo 2] Subdivision: "
 			<< (showSubdivisionDemo ? "ON (subdivided dog)" : "OFF (original low-poly dog)") << endl;
 		break;
 
 	case '3':
+		// Demo key 3: switch between original watermelon and clustered simplification.
 		showSimplificationDemo = !showSimplificationDemo;
 		cout << "[Demo 3] Simplification: "
 			<< (showSimplificationDemo ? "ON (simplified watermelon)" : "OFF (original watermelon)")
@@ -543,6 +575,7 @@ void DrawDuskBackground()
 
 void DrawFakeShadow(float x, float y, float z, float scaleX, float scaleZ, float alpha)
 {
+	// Soft transparent ellipse used as a simple contact shadow under scene objects.
 	glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT | GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_LIGHTING_BIT | GL_TEXTURE_BIT);
 	glDisable(GL_LIGHTING);
 	glDisable(GL_TEXTURE_2D);
@@ -565,6 +598,7 @@ void DrawFakeShadow(float x, float y, float z, float scaleX, float scaleZ, float
 }
 void DrawGroundGlow(float x, float y, float z, float scaleX, float scaleZ, float alpha, float red, float green, float blue)
 {
+	// Flat blended glow on the ground; this is visible geometry, not GL lighting.
 	glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT | GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_LIGHTING_BIT | GL_TEXTURE_BIT);
 	glDisable(GL_LIGHTING);
 	glDisable(GL_TEXTURE_2D);
@@ -591,6 +625,7 @@ void DrawGroundGlow(float x, float y, float z, float scaleX, float scaleZ, float
 
 void DrawVerticalGlow(float x, float y, float z, float scaleX, float scaleY, float alpha, float red, float green, float blue)
 {
+	// Upright blended glow for warm light sources like the campfire and lantern.
 	glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT | GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_LIGHTING_BIT | GL_TEXTURE_BIT);
 	glDisable(GL_LIGHTING);
 	glDisable(GL_TEXTURE_2D);
@@ -617,6 +652,7 @@ void DrawVerticalGlow(float x, float y, float z, float scaleX, float scaleY, flo
 
 void DrawCampfireSmoke(float x, float y, float z, float sceneTime)
 {
+	// Small animated alpha puffs for the campfire bonus scene detail.
 	glPushAttrib(GL_ENABLE_BIT | GL_CURRENT_BIT | GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_LIGHTING_BIT | GL_TEXTURE_BIT);
 	glDisable(GL_LIGHTING);
 	glDisable(GL_TEXTURE_2D);
@@ -860,18 +896,10 @@ void display()
 	float flicker = 0.85f + 0.15f * sin(sceneTime * 8.0f);
 	if (showShadingDemo)
 	{
-		glEnable(GL_LIGHT1);
+		// The warm fire effect is drawn with glow geometry.
+		// Fixed-function GL_LIGHT1 is not used because manual shading is required.
 		DrawGroundGlow(CAMPFIRE_X, GROUND_Y - 0.020f, CAMPFIRE_Z, 0.62f, 0.44f, 0.27f * flicker, 1.0f, 0.38f, 0.08f);
 		DrawVerticalGlow(CAMPFIRE_X, CAMPFIRE_Y + 0.24f, CAMPFIRE_Z, 0.18f, 0.28f, 0.25f * flicker, 1.0f, 0.46f, 0.10f);
-		GLfloat fire_pos[4] = { CAMPFIRE_X, CAMPFIRE_Y + 0.35f, CAMPFIRE_Z, 1.0f };
-		GLfloat fire_diffuse[4] = { 1.0f * flicker, 0.52f * flicker, 0.16f * flicker, 1.0f };
-		GLfloat fire_ambient[4] = { 0.24f, 0.10f, 0.03f, 1.0f };
-		glLightfv(GL_LIGHT1, GL_POSITION, fire_pos);
-		glLightfv(GL_LIGHT1, GL_DIFFUSE, fire_diffuse);
-		glLightfv(GL_LIGHT1, GL_AMBIENT, fire_ambient);
-		glLightf(GL_LIGHT1, GL_CONSTANT_ATTENUATION, 0.8f);
-		glLightf(GL_LIGHT1, GL_LINEAR_ATTENUATION, 1.2f);
-		glLightf(GL_LIGHT1, GL_QUADRATIC_ATTENUATION, 0.6f);
 	}
 	GLfloat campfire_ambient[4] = { 0.55f, 0.42f, 0.30f, 1.0f };
 	GLfloat campfire_diffuse[4] = { 0.95f, 0.72f, 0.42f, 1.0f };
@@ -897,21 +925,8 @@ void display()
 	const float LANTERN_Y = TABLETOP_PROP_Y;
 	const float LANTERN_Z = TABLE_Z - TABLE_LONG_DIR_Z * TABLE_PROP_OFFSET;
 	const float LANTERN_SCALE = 0.18f;
-	if (showShadingDemo)
-	{
-		glEnable(GL_LIGHT2);
-		GLfloat lantern_pos[4] = { LANTERN_X, LANTERN_Y + 0.12f, LANTERN_Z, 1.0f };
-		GLfloat lantern_light_diffuse[4] = { 1.0f, 0.78f, 0.38f, 1.0f };
-		GLfloat lantern_light_ambient[4] = { 0.10f, 0.075f, 0.04f, 1.0f };
-		GLfloat lantern_light_specular[4] = { 0.34f, 0.25f, 0.12f, 1.0f };
-		glLightfv(GL_LIGHT2, GL_POSITION, lantern_pos);
-		glLightfv(GL_LIGHT2, GL_DIFFUSE, lantern_light_diffuse);
-		glLightfv(GL_LIGHT2, GL_AMBIENT, lantern_light_ambient);
-		glLightfv(GL_LIGHT2, GL_SPECULAR, lantern_light_specular);
-		glLightf(GL_LIGHT2, GL_CONSTANT_ATTENUATION, 0.9f);
-		glLightf(GL_LIGHT2, GL_LINEAR_ATTENUATION, 1.0f);
-		glLightf(GL_LIGHT2, GL_QUADRATIC_ATTENUATION, 0.8f);
-	}
+	// Lantern brightness comes from material color; fixed-function GL_LIGHT2 stays off
+	// because the project uses manual face-normal shading.
 	GLfloat lantern_ambient[4] = { 0.50f, 0.44f, 0.34f, 1.0f };
 	GLfloat lantern_diffuse[4] = { 0.95f, 0.84f, 0.62f, 1.0f };
 	GLfloat lantern_specular[4] = { 0.35f, 0.30f, 0.22f, 1.0f };
@@ -927,11 +942,31 @@ void display()
 	glScalef(LANTERN_SCALE, LANTERN_SCALE, LANTERN_SCALE);
 	DrawModel(lanternModel, true);
 	glPopMatrix();
+
 	if (showShadingDemo)
-		DrawFakeShadow(LANTERN_X, LANTERN_Y - 0.01f, LANTERN_Z, 0.07f, 0.04f, 0.08f);
+	{
+		// Lantern glow: visible blended geometry, not fixed-function GL_LIGHT.
+		// This keeps the manual Lambert shading demo consistent.
+		DrawGroundGlow(
+			LANTERN_X, LANTERN_Y - 0.035f, LANTERN_Z,
+			0.18f, 0.11f, 0.12f,
+			1.0f, 0.78f, 0.28f
+		);
+
+		DrawVerticalGlow(
+			LANTERN_X, LANTERN_Y + 0.08f, LANTERN_Z,
+			0.11f, 0.16f, 0.15f,
+			1.0f, 0.82f, 0.32f
+		);
+
+		DrawFakeShadow(
+			LANTERN_X, LANTERN_Y - 0.01f, LANTERN_Z,
+			0.07f, 0.04f, 0.08f
+		);
+	}
 
 	// Trees: subtle ground-contact shadows.
-// Keep them soft and not too large, because these are background trees.
+	// Keep them soft and not too large, because these are background trees.
 
 	DrawFakeShadow(-0.30f, GROUND_Y - 0.025f, -1.42f, 0.14f, 0.08f, 0.07f);
 	DrawTreeInstance(-0.35f, GROUND_Y + 0.05f, -1.35f, 0.28f, 0.0f);	// Tree 1
@@ -945,7 +980,6 @@ void display()
 	DrawFakeShadow(1.51f, GROUND_Y - 0.025f, -1.08f, 0.15f, 0.09f, 0.08f);
 	DrawTreeInstance(1.45f, GROUND_Y + 0.05f, -1.00f, 0.30f, -20.0f);     // Tree 3
 
-	// Rock Placement: three rocks with different sizes.
 	// Rock Placement: three rocks with different sizes.
 	DrawFakeShadow(0.95f + 0.06f, GROUND_Y - 0.025f, -0.22f - 0.06f,		0.16f, 0.10f, 0.07f);
 	DrawRockInstance(0.95f, GROUND_Y + 0.12f, -0.22f, 1.25f, 0.55f, 1.10f, 35.0f);   // Å« ³³ÀÛÇÑ µ¹
@@ -1058,6 +1092,8 @@ static const int DOG_MATERIAL_TAIL_1 = 43;
 static const int DOG_MATERIAL_TAIL_2 = 44;
 static const int DOG_MATERIAL_UNDERSKIN = 45;
 
+// OBJ Loader: reads v, vt, vn, f, and usemtl lines into ObjModel.
+// Faces keep vertex/texcoord/normal indices so DrawModel can render them directly.
 bool LoadObj(const char* path, ObjModel& model, float scaleValue)
 {
 	FILE* fp = OpenAssetWithFallback(path, NULL, 0);
@@ -1296,6 +1332,8 @@ static bool HasDuplicateFaceVertex(const MMesh& face)
 	return false;
 }
 
+// Demo 3 simplification: cluster nearby vertices into grid cells, remap faces,
+// and skip collapsed faces so the watermelon keeps a valid lightweight mesh.
 bool BuildSimplifiedWatermelonModel(const ObjModel& source, ObjModel& result, float gridCellSize)
 {
 	result.vertices.clear();
@@ -1757,6 +1795,8 @@ static bool SubdivideDogOnce(const ObjModel& source, ObjModel& result)
 	return !result.vertices.empty() && !result.faces.empty();
 }
 
+// Demo 2 subdivision: run two custom midpoint-subdivision passes, then smooth
+// lightly so the dog shows a clearer high-vs-low polygon comparison.
 bool BuildSubdividedDogModel(const ObjModel& source, ObjModel& result)
 {
 	if (source.vertices.empty() || source.faces.empty())
@@ -2034,6 +2074,8 @@ void DrawDogModel(const ObjModel& model)
 	glDisable(GL_TEXTURE_2D);
 }
 
+// Generic OBJ draw path for textured props. Object-specific functions set color,
+// transforms, or material choices before calling this helper.
 void DrawModel(const ObjModel& model, bool useTexture)
 {
 	bool bindTexture = useTexture && model.hasTexture && model.textureId != 0;
@@ -2574,35 +2616,7 @@ int main(int argc, char* argv[])
 	treeModel.hasBarkTexture = treeModel.barkTextureId != 0;
 	treeModel.hasBranchTexture = treeModel.branchTextureId != 0;
 
-	display();
-
 	glutMainLoop();
-	if (groundTextureId != 0)
-		glDeleteTextures(1, &groundTextureId);
-	if (mountainTextureId != 0)
-		glDeleteTextures(1, &mountainTextureId);
-	if (campfireModel.textureId != 0)
-		glDeleteTextures(1, &campfireModel.textureId);
-	if (lanternModel.textureId != 0)
-		glDeleteTextures(1, &lanternModel.textureId);
-	if (rockModel.textureId != 0)
-		glDeleteTextures(1, &rockModel.textureId);
-	// Wood Texture Cleanup
-	if (woodModel.textureId != 0)
-		glDeleteTextures(1, &woodModel.textureId);
-	// Camping Car Texture Cleanup
-	if (campingCarModel.textureId != 0)
-		glDeleteTextures(1, &campingCarModel.textureId);
-	// Picnic Table Texture Cleanup
-	if (picnicTableModel.textureId != 0)
-		glDeleteTextures(1, &picnicTableModel.textureId);
-	if (butterflyModel.textureId != 0)
-		glDeleteTextures(1, &butterflyModel.textureId);
-	if (watermelonModel.textureId != 0)
-		glDeleteTextures(1, &watermelonModel.textureId);
-	if (treeModel.barkTextureId != 0)
-		glDeleteTextures(1, &treeModel.barkTextureId);
-	if (treeModel.branchTextureId != 0)
-		glDeleteTextures(1, &treeModel.branchTextureId);
+	ReleaseAllTextures();
 	return 0;
 }
