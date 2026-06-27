@@ -19,15 +19,15 @@ OpenGL을 이용해 여러 OBJ 모델을 불러오고, 하나의 여름밤 캠�
 
 ### Full Scene with Shading
 
-<img width="700" alt="Summer Night Campsite 3D Scene - Full Scene with Shading" src="https://github.com/user-attachments/assets/63dd6165-07cd-491a-bfea-12b5180e2112" />
+<img height="230" alt="Summer Night Campsite 3D Scene - Full Scene with Shading" src="https://github.com/user-attachments/assets/63dd6165-07cd-491a-bfea-12b5180e2112" />
 
 ### Subdivision Demo
 
-<img width="700" alt="Summer Night Campsite 3D Scene - Dog Subdivision Demo" src="https://github.com/user-attachments/assets/402817bb-733e-42b9-b2cf-86773a770ae2" />
+<img height="230" alt="Summer Night Campsite 3D Scene - Dog Subdivision Demo" src="https://github.com/user-attachments/assets/402817bb-733e-42b9-b2cf-86773a770ae2" />
 
 ### Simplification Demo
 
-<img width="450" alt="Summer Night Campsite 3D Scene - Watermelon Simplification Demo" src="https://github.com/user-attachments/assets/62144aeb-5f23-4971-bf83-229480aebfee" />
+<img height="230" alt="Summer Night Campsite 3D Scene - Watermelon Simplification Demo" src="https://github.com/user-attachments/assets/62144aeb-5f23-4971-bf83-229480aebfee" />
 
 ## Features
 
