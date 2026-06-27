@@ -872,8 +872,30 @@ void display()
 	// Camping Car Placement: keep it parked farther left/back so it does not cut into the tent.
 	DrawFakeShadow(-1.75f, GROUND_Y - 0.025f, -1.35f, 0.62f, 0.30f, 0.10f);
 	DrawCampingCarInstance(-1.75f, GROUND_Y, -1.35f, 0.85f, 105.0f);
+
 	if (showShadingDemo)
-		DrawVerticalGlow(-1.66f, GROUND_Y + 0.36f, -1.24f, 0.27f, 0.18f, 0.24f, 1.0f, 0.72f, 0.24f);
+	{
+		// Large side window glow: very subtle warm light.
+		DrawVerticalGlow(
+			-1.44f, GROUND_Y + 0.50f, -1.19f,
+			0.20f, 0.060f, 0.16f,
+			1.0f, 0.78f, 0.34f
+		);
+
+		// Small rear side window glow.
+		DrawVerticalGlow(
+			-1.50f, GROUND_Y + 0.37f, -1.20f,
+			0.12f, 0.050f, 0.12f,
+			1.0f, 0.74f, 0.32f
+		);
+
+		// Front cabin side window glow.
+		DrawVerticalGlow(
+			-1.35f, GROUND_Y + 0.50f, -1.06f,
+			0.18f, 0.060f, 0.18f,
+			1.0f, 0.80f, 0.36f
+		);
+	}
 	
 	// Table Placement: move slightly forward and left.
 	const float TABLE_X = -0.95f;
@@ -2494,7 +2516,6 @@ static void DrawDogWireframeModel(const ObjModel& model, float alpha)
 	else
 		glLineWidth(1.5f);
 
-	// Dark transparent wireframe overlay.
 	glColor4f(0.12f, 0.08f, 0.04f, alpha);
 
 	for (size_t i = 0; i < model.faces.size(); i++)
