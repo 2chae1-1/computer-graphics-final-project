@@ -19,7 +19,7 @@ OpenGL을 이용해 여러 OBJ 모델을 불러오고, 하나의 여름밤 캠�
 
 | Full Scene with Shading                                                                                                                  | Subdivision Demo                                                                                                                      | Simplification Demo                                                                                                                             |
 | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| <img height="180" alt="Full Scene with Shading" src="https://github.com/user-attachments/assets/63dd6165-07cd-491a-bfea-12b5180e2112" /> | <img height="180" alt="Dog Subdivision Demo" src="https://github.com/user-attachments/assets/402817bb-733e-42b9-b2cf-86773a770ae2" /> | <img height="180" alt="Watermelon Simplification Demo" src="https://github.com/user-attachments/assets/62144aeb-5f23-4971-bf83-229480aebfee" /> |
+| <img height="250" alt="Full Scene with Shading" src="https://github.com/user-attachments/assets/63dd6165-07cd-491a-bfea-12b5180e2112" /> | <img height="250" alt="Dog Subdivision Demo" src="https://github.com/user-attachments/assets/402817bb-733e-42b9-b2cf-86773a770ae2" /> | <img height="250" alt="Watermelon Simplification Demo" src="https://github.com/user-attachments/assets/62144aeb-5f23-4971-bf83-229480aebfee" /> |
 
 
 ## Features
